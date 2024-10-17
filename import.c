@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <dlfcn.h>
 
@@ -16,11 +17,9 @@ int main() {
     // Очищаем возможные ошибки
     dlerror(); 
 
-    // Имя функции, которую хотим импортировать
-    const char *func_name = "VOS_CheckFileImgCRC";
     // Получаем указатель на функцию
-    typedef int (*my_function_type)(const char* filename);
-    my_function_type my_function = (my_function_type) dlsym(handle, func_name);
+    typedef int (*my_function_type)(int crc, const uint8_t *buf, size_t len);
+    my_function_type my_function = (my_function_type) dlsym(handle, "crc_Calculate32");
 
     const char *dlsym_error = dlerror();
     if (dlsym_error) {
@@ -30,15 +29,10 @@ int main() {
     }
 
     // Пример имени файла для проверки
-    const char *filename = "firmware.original";
+    //const char *filename = "firmware.original";
     //const char *filename = "firmware-fixed2.img";
 
-    // Вызов импортированной функции с передачей имени файла и получение результата
-    int result = my_function(filename);
-    printf("Результат вызова функции проверки: %d\n", result);
-
-    // Закрываем библиотеку
-    dlclose(handle);
+   
 	
 	
 	
@@ -51,37 +45,23 @@ int main() {
         return 1;
     }
 
-    // Перемещение указателя в конец файла, чтобы узнать его размер
-    fseek(file, 0, SEEK_END);
-    long file_size = ftell(file);
-    rewind(file);  // Возвращаем указатель в начало файла
-
-    // Выделение памяти для буфера
-    char *buffer = (char *)malloc(file_size);
-    if (buffer == NULL) {
-        perror("Ошибка выделения памяти");
-        fclose(file);
-        return 1;
+	int crc = 0x00000000;
+	//int crc = 0x464C457F;
+	
+	uint8_t buffer[1024];
+	size_t bytesRead;
+	
+	// Чтение файла блоками
+    while ((bytesRead = fread(buffer, 1, sizeof(buffer), file)) > 0) {
+        crc = my_function(crc, buffer, bytesRead);
     }
 
-    // Чтение данных файла в буфер
-    size_t read_size = fread(buffer, 1, file_size, file);
-    if (read_size != file_size) {
-        perror("Ошибка чтения файла");
-        free(buffer);
-        fclose(file);
-        return 1;
-    }
-
-
-
-
-
-
-
-   
-    // Освобождение ресурсов
-    free(buffer);
+    // Закрытие файла
     fclose(file);
+	printf("CRC: %x\n", crc);
+   
+	
+	
+	
     return 0;
 }
